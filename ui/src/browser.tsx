@@ -7,12 +7,19 @@ import type { OpenChat } from './components/TopArea'
 import { hrefFor, parseLocation, type Route } from './route'
 
 // How a host page wires the app in. The served shell passes nothing (same origin, the address bar is the route).
-// The Hermes web dashboard tab passes `base` (its plugin API prefix), the SDK's authed `fetch` and an `openChat`.
+// The Hermes web dashboard tab passes `base` (its plugin API prefix), the SDK's authed `fetch` and an `openChat`;
+// it may also pass `card`, the card its own address bar names, because a host page's query string is the only way a
+// link can point at one card here (the route is state, not the address bar, once the address bar belongs to the host).
 export interface MountOptions {
   base?: string
   fetch?: typeof fetch
   openChat?: OpenChat
+  card?: string
 }
+
+// The card ids the board knows how to name: the same shape the server accepts, so a host page's hand-written URL
+// cannot smuggle anything else into a route.
+const CARD_ID = /^[A-Za-z0-9_-]+$/
 
 // An exported card file (`/crew-graph --html`) carries the card it shows, so it needs no server.
 function snapshotApi(snap: any): CrewApi {
@@ -33,6 +40,7 @@ function App({ opts }: { opts: MountOptions }) {
   const hosted = !!opts.base
   const api = useMemo(() => snap ? snapshotApi(snap) : fetchApi(opts.base || '', opts.fetch, !hosted), [snap, opts.base, opts.fetch, hosted])
   const start = (): Route => snap ? { page: 'card', id: snap.card_id }
+    : opts.card && CARD_ID.test(opts.card) ? { page: 'card', id: opts.card }
     : hosted ? { page: 'board', all: false } : parseLocation(window.location.pathname, window.location.search)
   const [route, setRoute] = useState<Route>(start)
   useEffect(() => {

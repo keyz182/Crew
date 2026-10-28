@@ -73,8 +73,10 @@ def short(text, n):
 
 
 def card_url(tid):
+    """One card's link on the board base: a path segment for the standalone server, a `card` parameter for a host
+    page that embeds the board (the Hermes dashboard tab, whose base already carries its own query string)."""
     base = (os.environ.get("CREW_CARD_BASE") or crew_card.dashboard_url()).rstrip("/")
-    return "%s/card/%s" % (base, urllib.parse.quote(tid))
+    return crew_card.card_link(base, urllib.parse.quote(tid))
 
 
 def state_file(board=None):

@@ -75,6 +75,15 @@ class NotifyTests(unittest.TestCase):
         self.conn.execute("update tasks set completed_at = completed_at - ? where id = ?", (secs, cid))
         self.conn.commit()
 
+    def test_a_host_page_base_puts_the_card_on_a_query_parameter(self):
+        # A base that is a host page (the Hermes dashboard tab) already carries a query string: the card rides on it
+        # rather than in a path segment, which the host page's router would swallow.
+        with mock.patch.dict(os.environ, {"CREW_CARD_BASE": "https://dash.example.test/crew?profile=default"}):
+            self.assertEqual("https://dash.example.test/crew?profile=default&card=t_1",
+                             N.card_url("t_1"))
+        with mock.patch.dict(os.environ, {"CREW_CARD_BASE": "https://dash.example.test"}):
+            self.assertEqual("https://dash.example.test/card/t_1", N.card_url("t_1"))
+
     # ---- done
     def test_a_done_card_reports_once_into_its_origin_and_a_restart_resends_nothing(self):
         cid = self.done()

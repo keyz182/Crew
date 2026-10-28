@@ -89,7 +89,10 @@ export function Board({ api, onOpenCard, flags, onFlags, home }: Props) {
   const live = board.live || 0
   const cards = board.cards || 0
   const counts = board.counts || {}
-  const link = (board.dashboard_url || (typeof location !== 'undefined' ? location.origin : '')) + '/'
+  // A base that already carries a query string is a host page (the Hermes dashboard tab, which embeds this board):
+  // its URL is the link as it stands, and a trailing slash would only land after the query.
+  const base = board.dashboard_url || (typeof location !== 'undefined' ? location.origin : '')
+  const link = base.includes('?') ? base : base + '/'
   const brand = (
     <a className="brand" href="/" title="overview" aria-label="crew overview" onClick={home ? e => { e.preventDefault(); home() } : undefined}>
       <img src={MARK_URI} alt="" width={26} height={26} />

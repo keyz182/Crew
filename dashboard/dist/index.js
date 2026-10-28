@@ -20,6 +20,21 @@
   // A chat session the card page may ask to open: a profile name and a session id.
   var PROFILE_RE = /^[A-Za-z0-9_.-]{1,64}$/;
   var SESSION_RE = /^[A-Za-z0-9_-]{1,128}$/;
+  var CARD_RE = /^[A-Za-z0-9_-]{1,64}$/;
+
+  // The card this tab should open, from its own address bar: "?profile=default&card=t_1a2b3c". The app is mounted
+  // with the route in state rather than in the address bar (the address bar belongs to the dashboard), so a link
+  // that points at one card has nowhere else to say it. Anything that is not a plain card id is ignored: the board
+  // shows, exactly as it does without the parameter.
+  function requestedCard() {
+    var card = "";
+    try {
+      card = new URLSearchParams(window.location.search || "").get("card") || "";
+    } catch (e) {
+      return "";
+    }
+    return CARD_RE.test(card) ? card : "";
+  }
 
   var appReady = null;   // one fetch of app.js per page load
 
@@ -66,7 +81,9 @@
       setError(null);
       loadApp().then(function () {
         if (!live || !hostRef.current) return;
-        unmount = window.__crewMount(hostRef.current, { base: BASE, fetch: SDK.authedFetch, openChat: openChat });
+        unmount = window.__crewMount(hostRef.current, {
+          base: BASE, fetch: SDK.authedFetch, openChat: openChat, card: requestedCard()
+        });
       }).catch(function (err) {
         if (live) setError(err.message || String(err));
       });

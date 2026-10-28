@@ -55,12 +55,15 @@ class ShellServerTests(RealBoardCase):
             self.assertTrue(hdr["content-type"].startswith("text/html"), path)
             text = body.decode("utf-8")
             self.assertIn("<div id=crew-app data-crew-shell></div>", text)
-            self.assertIn("<script src=/app.js></script>", text)
+            # /boot.js first: it patches fetch so a link carrying credentials in the URL is stripped before the
+            # request is made (Chromium refuses a fetch whose URL has userinfo), then the app itself
+            self.assertIn("<script src=/boot.js></script><script src=/app.js></script>", text)
             self.assertIn("<meta charset=utf-8>", text)
             self.assertIn("name=viewport", text)
             self.assertIn('rel="icon"', text)
             # nothing else: no inline script, no page markup of the old board or card
-            self.assertEqual(re.findall(r"<script\b[^>]*>", text), ["<script src=/app.js>"], path)
+            self.assertEqual(re.findall(r"<script\b[^>]*>", text),
+                             ["<script src=/boot.js>", "<script src=/app.js>"], path)
             for old in ("page-board", "page-card", "INIT=", "<style", "id=badge"):
                 self.assertNotIn(old, text, path)
             shells.add(text)

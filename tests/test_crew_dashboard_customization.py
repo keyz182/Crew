@@ -190,8 +190,17 @@ class CrewDashboardCustomizationTests(RealBoardCase):
         with open(os.path.join(CREW_ROOT, "dashboard", "dist", "index.js"), "r", encoding="utf-8") as f:
             content = f.read()
         self.assertIn('authedFetch(BASE + "/app.js")', content)
-        self.assertIn("window.__crewMount(hostRef.current, { base: BASE, fetch: SDK.authedFetch", content)
+        self.assertIn("window.__crewMount(hostRef.current, {", content)
+        self.assertIn("base: BASE, fetch: SDK.authedFetch, openChat: openChat", content)
         self.assertIn('id: "crew-app"', content)
+
+    def test_index_js_passes_the_card_its_address_bar_names(self):
+        with open(os.path.join(CREW_ROOT, "dashboard", "dist", "index.js"), "r", encoding="utf-8") as f:
+            content = f.read()
+        # the app is mounted with the route in state, so a link naming one card has to arrive as a query parameter
+        self.assertIn("card: requestedCard()", content)
+        self.assertIn('URLSearchParams(window.location.search || "").get("card")', content)
+        self.assertIn("CARD_RE.test(card) ? card : \"\"", content)   # anything that is not an id is dropped, not trusted
 
     def test_a_failing_builder_answers_500_with_the_detail_in_the_log_only(self):
         import crew_graph_serve

@@ -13659,7 +13659,8 @@ body:has(#crew-app[data-crew-shell]){margin:0;background:var(--crew-bg)}
     const live = board.live || 0;
     const cards = board.cards || 0;
     const counts = board.counts || {};
-    const link = (board.dashboard_url || (typeof location !== "undefined" ? location.origin : "")) + "/";
+    const base = board.dashboard_url || (typeof location !== "undefined" ? location.origin : "");
+    const link = base.includes("?") ? base : base + "/";
     const brand = /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("a", { className: "brand", href: "/", title: "overview", "aria-label": "crew overview", onClick: home ? (e) => {
       e.preventDefault();
       home();
@@ -15819,6 +15820,7 @@ body:has(#crew-app[data-crew-shell]){margin:0;background:var(--crew-bg)}
 
   // src/browser.tsx
   var import_jsx_runtime18 = __toESM(require_jsx_runtime(), 1);
+  var CARD_ID = /^[A-Za-z0-9_-]+$/;
   function snapshotApi(snap) {
     return {
       get: async (path) => {
@@ -15832,7 +15834,7 @@ body:has(#crew-app[data-crew-shell]){margin:0;background:var(--crew-bg)}
     const snap = window.__CREW_SNAPSHOT;
     const hosted = !!opts.base;
     const api = (0, import_react13.useMemo)(() => snap ? snapshotApi(snap) : fetchApi(opts.base || "", opts.fetch, !hosted), [snap, opts.base, opts.fetch, hosted]);
-    const start = () => snap ? { page: "card", id: snap.card_id } : hosted ? { page: "board", all: false } : parseLocation(window.location.pathname, window.location.search);
+    const start = () => snap ? { page: "card", id: snap.card_id } : opts.card && CARD_ID.test(opts.card) ? { page: "card", id: opts.card } : hosted ? { page: "board", all: false } : parseLocation(window.location.pathname, window.location.search);
     const [route, setRoute] = (0, import_react13.useState)(start);
     (0, import_react13.useEffect)(() => {
       if (snap || hosted) return;

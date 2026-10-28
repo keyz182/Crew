@@ -411,10 +411,43 @@ APP_JS = os.path.join(HERE, "crew_dashboard", "app.js")
 CARD_PAGE_RX = re.compile(r"^/card/[A-Za-z0-9_-]+/?$")
 
 
+# A link may carry basic-auth credentials (https://user:pass@host/card/<id>). The navigation is authenticated and
+# the browser keeps the credentials in its auth cache for later requests, but the document URL still holds them, and
+# Chromium refuses any relative fetch resolved against such a URL ("Request cannot be constructed from a URL that
+# includes credentials") - which breaks every JSON route the app polls. history.replaceState cannot clean it up: a
+# document loaded from a credentials URL gets a SecurityError rewriting to the credential-free one. So instead the
+# page patches fetch to resolve relative URLs against a credential-free base (location.origin keeps no userinfo).
+# Runs before app.js; a separate file, not inline, so the CSP above still needs no nonce.
+BOOT_JS = rb"""(function () {
+  // Chromium hides the credentials from location.href and location.username but keeps them in document.URL
+  var creds = /^[a-z]+:\/\/[^/@]*@/i.test(document.URL || '');
+  if (!creds || !window.fetch) return;
+  var base = location.origin + location.pathname.replace(/[^/]*$/, '');
+  function clean(u) {
+    if (typeof u !== 'string') return u;
+    if (/^[a-z][a-z0-9+.-]*:/i.test(u)) return u.replace(/^(https?:)\/\/[^/@]*@/i, '$1//');
+    try { return new URL(u, base).href; } catch (e) { return u; }
+  }
+  var orig = window.fetch;
+  window.fetch = function (input, init) {
+    try {
+      if (typeof input === 'string') input = clean(input);
+      else if (input && input.url) {
+        var url = clean(input.url);
+        if (url !== input.url) input = new Request(url, input);
+      }
+    } catch (e) {}
+    return orig.call(this, input, init);
+  };
+})();
+"""
+
+
 def shell_page():
     return ("<!doctype html><html lang=en><head><meta charset=utf-8>"
             "<meta name=viewport content='width=device-width, initial-scale=1'><title>Crew</title>"
-            "%s</head><body><div id=crew-app data-crew-shell></div><script src=/app.js></script></body></html>"
+            "%s</head><body><div id=crew-app data-crew-shell></div>"
+            "<script src=/boot.js></script><script src=/app.js></script></body></html>"
             % CG.favicon_link())
 
 
@@ -633,6 +666,8 @@ class Handler(BaseHTTPRequestHandler):
             if err:
                 return self._send(404, "no graph for %s (%s)\n" % (card_id, err), "text/plain; charset=utf-8")
             return self._send(200, shell_page(), "text/html; charset=utf-8")
+        if path == "/boot.js":
+            return self._send(200, BOOT_JS, "text/javascript; charset=utf-8")
         if path == "/app.js":
             js = app_js()
             if js is None:

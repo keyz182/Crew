@@ -145,6 +145,22 @@ def dashboard_url():
     return "http://127.0.0.1:%s" % (os.environ.get("CREW_GRAPH_PORT") or "8799")
 
 
+def card_link(base, card_id):
+    """The URL of one card on a board base. A base that already carries a query string is a host page that takes the
+    card as a parameter — the Hermes dashboard tab, which mounts this board in a tab whose address bar it owns, so
+    `?profile=default&card=<id>` — and anything else gets the usual `/card/<id>` path the standalone server serves.
+    Nothing is percent-encoded here: a caller that wants encoding passes an id that is already quoted.
+
+    `card_id` may be the literal placeholder the card-open reply asks the model to fill in, so it is inserted as given.
+    """
+    base = str(base or "").strip().rstrip("/")
+    if not base:
+        return ""
+    if "?" in base:
+        return "%s&card=%s" % (base, card_id)
+    return "%s/card/%s" % (base, card_id)
+
+
 GATEWAY_HEARTBEAT_STALE_S = 120   # hermes gateway/status.py _RUNTIME_STATUS_STALE_TTL_S: 2x its 60 s housekeeping beat
 GATEWAY_START_HINT = "hermes gateway run (or hermes gateway install to start it automatically)"
 

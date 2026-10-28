@@ -964,7 +964,8 @@ function Board({ api, onOpenCard, flags, onFlags, home }) {
   const live = board.live || 0;
   const cards = board.cards || 0;
   const counts = board.counts || {};
-  const link = (board.dashboard_url || (typeof location !== "undefined" ? location.origin : "")) + "/";
+  const base = board.dashboard_url || (typeof location !== "undefined" ? location.origin : "");
+  const link = base.includes("?") ? base : base + "/";
   const brand = /* @__PURE__ */ jsx4("a", { className: "brand", href: "/", title: "overview", "aria-label": "crew overview", onClick: home ? (e) => {
     e.preventDefault();
     home();

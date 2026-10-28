@@ -1495,12 +1495,18 @@ def _surface(platform=""):
 
 def _link_line(platform=""):
     """The last line of the card-open reply. Desktop: the pointer to the Crew page (no URL). Elsewhere, with `<id>` for the
-    model to fill: "Crew Dashboard: <dashboard URL>/card/<id>", "" when no dashboard URL is known."""
+    model to fill: "Crew Dashboard: " then the card's URL on the board base — the usual `/card/<id>` path for the
+    standalone server, or `&card=<id>` after the base's own query string when the base is a host page that embeds the
+    board (the Hermes dashboard tab). "" when no dashboard URL is known."""
     if _surface(platform) == "desktop":
         tool = _card_tool()
         return tool.DESKTOP_LINE if tool is not None else ""
     url = _board_url()
-    return "%s: %s/card/<id>" % (LINK_LABEL_DEFAULT, url) if url else ""
+    if not url:
+        return ""
+    tool = _card_tool()
+    link = tool.card_link(url, "<id>") if tool is not None else "%s/card/<id>" % url.rstrip("/")
+    return "%s: %s" % (LINK_LABEL_DEFAULT, link)
 
 
 def _banner_open(platform=""):

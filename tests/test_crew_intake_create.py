@@ -476,7 +476,27 @@ class BannerTests(unittest.TestCase):
         text = (REPO / "skills" / "crew" / "SKILL.md").read_text(encoding="utf-8")
         self.assertIn("LAST line of the reply, after the \"I'll notify you here...\" line", text)
         self.assertIn("Open it in Crew: the Crew entry in the sidebar, or preview it with Ctrl+J", text)
-        self.assertIn("Crew Dashboard: <dashboard URL>/card/<id>", text)
+        self.assertIn("`Crew Dashboard: `", text)
+        self.assertIn("`/card/<id>`", text)
+        self.assertIn("`&card=<id>`", text)
+
+    def test_a_host_page_base_puts_the_card_on_a_query_parameter(self):
+        # ctx_for() owns CREW_DASHBOARD_URL, so the base is set here and the preload called directly.
+        os.environ["CREW_DASHBOARD_URL"] = "https://starbug.example.test/crew?profile=default"
+        try:
+            ctx = self.plug.crew_intake_preload(user_message="/crew make it fast", session_id="SB6", turn_id="T",
+                                                platform="telegram")["context"].split("<skill")[0]
+        finally:
+            os.environ.pop("CREW_DASHBOARD_URL", None)
+        self.assertIn("Crew Dashboard: https://starbug.example.test/crew?profile=default&card=<id>", ctx)
+
+    def test_card_link_keeps_the_path_for_a_bare_base(self):
+        tool = self.plug._card_tool()
+        self.assertEqual("https://crew.example.test/card/t_1",
+                         tool.card_link("https://crew.example.test", "t_1"))
+        self.assertEqual("https://crew.example.test/crew?profile=default&card=t_1",
+                         tool.card_link("https://crew.example.test/crew?profile=default", "t_1"))
+        self.assertEqual("", tool.card_link("", "t_1"))
 
     def test_the_board_defaults_to_the_local_service(self):
         os.environ.pop("CREW_DASHBOARD_URL", None)
