@@ -27,9 +27,11 @@ import html as _html
 import json
 import os
 import re
+import contextlib
 import sqlite3
 import sys
 import textwrap
+import threading
 import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -100,18 +102,55 @@ def discover_state_dbs():
 
 # ----------------------------------------------------------------- db helpers
 
+# Inside read_session() q() reuses one read-only handle per db file; outside it every call opens and closes its own.
+_q_scope = threading.local()
+
+
+@contextlib.contextmanager
+def read_session():
+    """Scope for one render: q() reuses one read-only connection per db file, and every one is closed on exit.
+
+    A render runs 64 (board) to 118 (card) queries; opening a connection for each was most of its cost. The handles
+    live only as long as the render, never as long as the thread: an open handle blocks deleting or replacing the
+    file on Windows (WinError 32), and a long-lived one would pin a board that was archived or swapped. Nested
+    sessions join the outer one."""
+    if getattr(_q_scope, "conns", None) is not None:
+        yield
+        return
+    _q_scope.conns = {}
+    try:
+        yield
+    finally:
+        conns, _q_scope.conns = _q_scope.conns, None
+        for conn in conns.values():
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+
 def q(db_path, sql, params=()):
     """Run a read-only query; return list of rows, or [] on any failure (never raise)."""
     if not db_path or not os.path.exists(db_path):
         return []
+    conns = getattr(_q_scope, "conns", None)
     try:
-        conn = sqlite3.connect("file:%s?mode=ro" % db_path, uri=True)
-        try:
-            rows = conn.execute(sql, params).fetchall()
-            return rows
-        finally:
-            conn.close()
+        if conns is None:
+            conn = sqlite3.connect("file:%s?mode=ro" % db_path, uri=True)
+            try:
+                return conn.execute(sql, params).fetchall()
+            finally:
+                conn.close()
+        conn = conns.get(db_path)
+        if conn is None:
+            conn = conns[db_path] = sqlite3.connect("file:%s?mode=ro" % db_path, uri=True)
+        return conn.execute(sql, params).fetchall()
     except Exception:
+        if conns is not None:
+            try:
+                conns.pop(db_path).close()
+            except Exception:
+                pass
         return []
 
 
