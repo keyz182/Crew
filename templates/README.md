@@ -28,6 +28,26 @@ Edit a template, then run the installer:
 Re-running never overwrites an edit made in the profile: the installer records what it shipped
 and skips a file that changed, reporting it as `kept your edit`.
 
+## Your own overrides
+
+An edit to a file here is lost or conflicts when crew updates. To keep your own values, put them in
+`<Hermes home>/crew/templates/<role>/` instead (`~/.hermes/crew/templates/worker/` on Linux and macOS,
+`%LOCALAPPDATA%\hermes\crew\templates\worker\` on Windows). An update never touches that folder.
+
+    settings.conf   only the keys you change. Each one replaces the shipped value; a key the
+                    template does not have is added. A list such as `skills_extra` replaces the
+                    whole shipped list.
+    SOUL.md         replaces the shipped persona.
+
+For example, to give the worker another model:
+
+    # ~/.hermes/crew/templates/worker/settings.conf
+    model.default = your-model
+    model.provider = your-provider
+
+Then run the installer as above. `--check` compares the profiles with the same merged values.
+`CREW_TEMPLATE_OVERRIDES` names another folder in place of `<Hermes home>/crew/templates`.
+
 Profile names default to `<prefix><role>`: `crew-worker`, `crew-verifier`, and so on. A card is
 assigned to its role's profile by scripts/crew_card.py, and falls back to the installing profile
 when that role profile does not exist.

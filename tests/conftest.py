@@ -12,6 +12,8 @@ import tempfile
 _SANDBOX = tempfile.mkdtemp(prefix="crew-pytest-sandbox-")
 os.environ["TMPDIR"] = _SANDBOX
 tempfile.tempdir = _SANDBOX
+# The owner's template overrides (install.py) must not reach a test that reads the shipped templates.
+os.environ["CREW_TEMPLATE_OVERRIDES"] = os.path.join(_SANDBOX, "no-template-overrides")
 
 
 def _cleanup():

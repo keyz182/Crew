@@ -739,9 +739,38 @@ def _conf_value(val):
 INSTALLER_KEYS = ("skills_extra",)
 
 
+# The owner's own template files, kept outside the package so an update never touches them:
+# <default home>/crew/templates/<role>/settings.conf overrides the shipped keys one by one, and a SOUL.md
+# there replaces the shipped persona. CREW_TEMPLATE_OVERRIDES names another folder (the tests point it at
+# an empty one, so an owner's overrides never leak into a run).
+def _overrides_root():
+    return os.environ.get("CREW_TEMPLATE_OVERRIDES") or os.path.join(crew_card.default_home(), "crew", "templates")
+
+
+def _override_of(tpl_file):
+    """The owner's override of a shipped template file: the same role folder and file name under the overrides root."""
+    role_dir, name = os.path.split(tpl_file)
+    return os.path.join(_overrides_root(), os.path.basename(role_dir), name)
+
+
+def _soul_source(tpl):
+    """The SOUL.md a role profile gets: the owner's override when there is one, else the shipped template."""
+    shipped = os.path.join(tpl, "SOUL.md")
+    override = _override_of(shipped)
+    return override if os.path.isfile(override) else shipped
+
+
 def _conf_lines(conf_path):
     """[(key, value)] for every `key = value` line of a role's settings.conf, installer directives
-    included, `{prefix}` resolved. [] when the file is missing."""
+    included, `{prefix}` resolved, with the owner's override of the same file on top: an override key
+    replaces the shipped value in place, a key the template lacks is added at the end. [] when neither exists."""
+    merged = dict(_read_conf_lines(conf_path))
+    merged.update(_read_conf_lines(_override_of(conf_path)))
+    return list(merged.items())
+
+
+def _read_conf_lines(conf_path):
+    """[(key, value)] for every `key = value` line of one settings.conf file. [] when the file is missing."""
     try:
         text = Path(conf_path).read_text(encoding="utf-8")
     except OSError:
@@ -1444,7 +1473,7 @@ def step_profiles(source_profile, prefix, apply, no_profiles=False):
     todo = []
     for role, name, home, tpl in plans:
         exists = os.path.isdir(home)
-        soul = os.path.join(tpl, "SOUL.md")
+        soul = _soul_source(tpl)
         rec = _shipped_record(home) if exists else {}
         shipped = Path(soul).read_text(encoding="utf-8") if os.path.exists(soul) else ""
         cur = None
@@ -1489,7 +1518,7 @@ def step_profiles(source_profile, prefix, apply, no_profiles=False):
         owned = (not existed) or crew_owned(home)
         os.makedirs(os.path.join(home, "crew"), exist_ok=True)
         rec = _shipped_record(home)
-        soul_src = os.path.join(tpl, "SOUL.md")
+        soul_src = _soul_source(tpl)
         if os.path.exists(soul_src):
             shipped = Path(soul_src).read_text(encoding="utf-8")
             dst = os.path.join(home, "SOUL.md")
