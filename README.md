@@ -5,7 +5,7 @@
 **You ask once. A coordinator owns the card until its proof passes.**
 
 [![Hermes plugin](https://img.shields.io/badge/Hermes-plugin-3fb950?style=flat-square)](https://github.com/NousResearch/hermes-agent)
-[![Version](https://img.shields.io/badge/version-0.10.5-3fb950?style=flat-square)](plugin.yaml)
+[![Version](https://img.shields.io/badge/version-0.10.6-3fb950?style=flat-square)](plugin.yaml)
 [![tests](https://github.com/macd2/Crew/actions/workflows/tests.yml/badge.svg)](https://github.com/macd2/Crew/actions/workflows/tests.yml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue?style=flat-square)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
@@ -34,13 +34,19 @@ result back in the same chat, or one concrete question when it truly needs you.
 
 [![The crew dashboard: a card's graph with its running worker selected and the live transcript](assets/dashboard.webp)](https://crew.forgecoreai.com)
 
+## What's new in 0.10.6
+
+- **The nightly shim never reinstalls on its own.** It re-installs a release checkout before the proofs only when
+  `CREW_RELEASE` names one; the sibling-`release` default is gone, so a catalog or clone install proves the copy it has.
+- **The chat ticket-id click is gone.** Crew no longer listens for clicks in Desktop's own chat; the card link
+  `<dashboard>/crew?card=<id>` is a plain link that opens the dashboard.
+
 ## What's new in 0.10.5
 
 - **One link to a card, and the ticket id in a chat message is that link.** A card now has one shareable address,
   `<dashboard>/crew?card=<id>`, that opens the card on the standalone page, in the Hermes web dashboard's Crew tab and
-  in Hermes Desktop. The notifications and endings Crew writes link the ticket id to it, and in a Desktop chat a click
-  on the id opens the card in the Crew tab. Only a link that reads as the ticket id and points at this dashboard is
-  taken; every other link, a modified click and Copy Link keep Desktop's own handling (#23, thanks @phuongvm).
+  in Hermes Desktop. The notifications and endings Crew writes link the ticket id to it (#23, thanks @phuongvm; the
+  in-chat click that opened it in-app was removed in 0.10.6).
 - **Windows: the right `hermes.exe`.** Crew's own scheduled steps now start Hermes from the checkout's own launcher
   and never from a package-manager venv's `hermes.exe`, which belongs to a build snapshot and registers as a different
   install (#18, thanks @phuongvm).
@@ -70,7 +76,7 @@ result back in the same chat, or one concrete question when it truly needs you.
   view on top of it.
 - **Parity compares against the release**, not the package working tree, so a dev edit after a release no longer
   reddens the nightly with nothing wrong (10-20 and 10-24 both did). The nightly shim installs the release tree
-  first, and leaves a shipped install alone.
+  first when `CREW_RELEASE` names one (0.10.6: opt-in only).
 - **The attention proof waits for the board** instead of reading once, so a slow poll no longer trips "the
   cleared row is gone from the board data too" (it failed 1 run in 6 under load).
 

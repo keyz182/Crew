@@ -7,7 +7,7 @@ import { blockedWatch } from './blocked-watch'
 import { CrewPage } from './components/CrewPage'
 import { FlowPane } from './components/FlowPane'
 import { CrewHostContext, type CrewHost, type KanbanRow } from './host'
-import { CREW_ROUTE, cardFromHref, cardLink } from './open-card'
+import { CREW_ROUTE, cardLink } from './open-card'
 import { crewVarsFromTheme } from './theme'
 
 function Pane({ api }: { api: ReturnType<typeof restApi> }) {
@@ -118,29 +118,6 @@ type WatchCtx = {
   os?: { notify(n: { title: string; body: string }): unknown }
 }
 
-// A ticket link in chat ("[t_x](<dashboard>/crew?card=t_x)", crew_notify) opens the card in the Crew tab. Desktop renders
-// it as an external link, which would open the system browser at a dashboard that may not run (Windows). This capture
-// listener takes only a plain left-click on a link that reads as the ticket id itself and points at this dashboard
-// (board.json's dashboard_url), so another host's "/crew?card=" link, modified clicks and Copy Link keep Desktop's own
-// handling. Until the dashboard URL is known (the first fetch is still out, or failed) every link keeps it too.
-function watchCardLinks(doc: Document, api: CrewApi): () => void {
-  let dashboard = ''
-  const load = () => api.get<{ dashboard_url?: string }>('/board.json').then(b => { dashboard = b?.dashboard_url || '' }, () => {})
-  load()
-  const onClick = (e: MouseEvent) => {
-    if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return
-    const a = (e.target as Element | null)?.closest?.('a[href]')
-    if (!a || a.closest('.crew-scope')) return
-    if (!dashboard) { load(); return }
-    const id = cardFromHref(a.getAttribute('href') || '', dashboard)
-    if (!id || (a.textContent || '').trim() !== id) return
-    e.preventDefault()
-    sdk.host?.navigate?.(cardLink(id))
-  }
-  doc.addEventListener('click', onClick, true)
-  return () => doc.removeEventListener('click', onClick, true)
-}
-
 export default {
   id: 'crew',
   name: 'Crew',
@@ -159,9 +136,5 @@ export default {
       }
     ])
     watchBlocked(ctx, api)
-    if (typeof sdk.host?.navigate === 'function' && typeof document !== 'undefined') {
-      const off = watchCardLinks(document, api)
-      if (typeof ctx.onDispose === 'function') ctx.onDispose(off)
-    }
   }
 }

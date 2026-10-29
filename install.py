@@ -62,11 +62,12 @@ PROOFS_SHIM_TEXT = """\
 # one that cannot import Hermes), so this hands over to the plugin's own copy of the proof runner, which
 # switches to the Hermes python itself.
 #
-# Before the proofs it installs the RELEASE checkout when this box has one. Parity compares every crew home
+# Before the proofs it installs the RELEASE checkout, only when CREW_RELEASE names one (opt-in: a catalog or
+# clone install never sets it, so nothing is ever reinstalled from a path nobody named). Parity compares every crew home
 # against the release, so a dev edit after the last install used to redden the night with no defect behind it
 # (10-20, 10-24); installing first keeps the box and the comparison on one tree. It installs from that checkout,
 # never from the temp export parity compares against: an install records its own source in owner.json, and a
-# temp path there goes stale. A shipped install (a user's own clone, no release checkout) is left alone.
+# temp path there goes stale. Without CREW_RELEASE the installed copy is proved as it is.
 import os
 import subprocess
 import sys
@@ -80,7 +81,7 @@ try:
     sys.path.insert(0, os.path.join(_home, "..", "plugins", "crew", "scripts"))
     import crew_card
     _pkg = crew_card.package_dir() or ""
-    _rel = os.environ.get("CREW_RELEASE") or (os.path.join(os.path.dirname(_pkg), "release") if _pkg else "")
+    _rel = os.environ.get("CREW_RELEASE", "")
     if _rel and os.path.exists(os.path.join(_rel, ".git")):
         _dirty = subprocess.run(["git", "-C", _rel, "status", "--porcelain"],
                                 capture_output=True, text=True).stdout.strip()

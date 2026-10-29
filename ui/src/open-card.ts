@@ -21,14 +21,3 @@ export function cardFromSearch(search: string): string {
   const id = new URLSearchParams((search || '').replace(/^\?/, '')).get('card') || ''
   return CARD_ID.test(id) ? id : ''
 }
-
-// The card id of a shareable card link ("<dashboard>/crew?card=<id>", crew_card.card_url) that points at THIS dashboard,
-// or '' when the href is another site's or the dashboard is not known yet. `dashboardUrl` is board.json's dashboard_url,
-// the base crew_notify builds every ticket link on, so a link Crew wrote always matches and any other host never does.
-export function cardFromHref(href: string, dashboardUrl: string): string {
-  let url: URL, base: URL
-  try { url = new URL(href); base = new URL(dashboardUrl) } catch { return '' }
-  const dir = (u: URL) => u.origin + u.pathname.replace(/\/+$/, '').replace(/\/crew$/, '')   // crew_card.card_url's own trim
-  if (!/^https?:$/.test(url.protocol) || !url.pathname.replace(/\/+$/, '').endsWith(CREW_ROUTE) || dir(url) !== dir(base)) return ''
-  return cardFromSearch(url.search)
-}
