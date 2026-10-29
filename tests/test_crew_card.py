@@ -159,6 +159,13 @@ class OriginIdTests(unittest.TestCase):
         self.assertEqual("zulip:1|2", crew_card.origin_id("  zulip:1|2  "))
 
 
+class CardUrlTests(unittest.TestCase):
+    def test_the_card_link_is_the_crew_route_with_the_id(self):
+        self.assertEqual("http://dash/crew?card=t_1", crew_card.card_url("t_1", "http://dash/"))
+        self.assertEqual("http://dash/crew?card=t_1", crew_card.card_url("t_1", "http://dash/crew"))   # a base that is the tab
+        self.assertEqual("http://dash/crew?card=a%2Fb", crew_card.card_url("a/b", "http://dash"))
+
+
 class FmtTokensTests(unittest.TestCase):
     """fmt_tokens(n): the numbers printed in stats."""
 

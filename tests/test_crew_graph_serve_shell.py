@@ -73,6 +73,14 @@ class ShellServerTests(RealBoardCase):
         self.assertIn(b"no graph for t_nosuchcard", body)
         self.assertNotIn(b"crew-app", body)
 
+    def test_the_crew_card_link_is_the_card_page_and_a_bad_id_is_a_404(self):
+        self.assertEqual(self.req("/crew")[0], 200)                       # no card: the board's shell
+        code, _hdr, body = self.req("/crew?card=t_nosuchcard")
+        self.assertEqual(code, 404)
+        self.assertIn(b"no graph for t_nosuchcard", body)
+        for bad in ("a%2Fb", "a/b", "..%2Fx", "a%20b"):
+            self.assertEqual(self.req("/crew?card=" + bad)[0], 404, bad)
+
     def test_app_js_is_served_with_the_right_type_and_no_cache(self):
         code, hdr, body = self.req("/app.js")
         self.assertEqual(code, 200)

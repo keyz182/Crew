@@ -551,19 +551,48 @@ def proof_blocked_ask(card_id, cmd, reason):
     reason = " ".join(str(reason).split())
     return {"decision": "ask_owner", "proof_ask": {"kind": "blocked", "command": cmd, "reason": reason},
             "question": "Proof blocked by Hermes safety: `%s` (%s). Reply `brave` to run it for this card, or "
-                        "`/crew-safety brave` to stop being asked." % (cmd[:90], reason[:70]),
+                        "`/crew-safety brave` to stop being asked." % (cmd[:400], reason[:240]),
             "detail": "Proof command: %s\nHermes: %s\nReply `brave` to run it for this card, or `/crew-safety brave` "
                       "to stop being asked.\nRecord the answer: %s" % (cmd, reason, answer_line(card_id, "--brave"))}
 
 
-def proof_change_ask(card_id, old, new):
+def proof_diff_span(old, new, context=24, cap=120):
+    """Where two long proof commands differ, as (old window, new window): a shared head would hide a changed assertion
+    under head-truncation. None when they are equal or differ within the first 20 characters."""
+    old, new = str(old or ""), str(new or "")
+    pre = 0
+    while pre < min(len(old), len(new)) and old[pre] == new[pre]:
+        pre += 1
+    if old == new or pre < 20:
+        return None
+    suf = 0
+    while suf < min(len(old), len(new)) - pre and old[-1 - suf] == new[-1 - suf]:
+        suf += 1
+    start = max(0, pre - context)
+
+    def window(text):
+        return ("..." if start else "") + text[start:len(text) - suf + context][:cap]
+    return window(old), window(new)
+
+
+def proof_change_ask(card_id, old, new, why=""):
     """The ask_owner decision for a coordinator rescope that names a different proof command. Models propose,
-    the owner confirms: nothing runs until `/crew-proof <card> yes` writes the new snapshot."""
+    the owner confirms: nothing runs until `/crew-proof <card> yes` writes the new snapshot. The command and its diff
+    come first; the model's own reason follows, labelled as its claim, so it cannot steer the yes."""
+    why = " ".join(str(why or "").split())[:240]
+    reason = (" Coordinator's reason: %s." % why.rstrip(".")) if why else ""
+    span = proof_diff_span(old, new)
+    if span:
+        question = ("The coordinator proposes a new proof command [diff: `%s` -> `%s`]: `%s`. Reply yes to accept it.%s"
+                    % (span[0], span[1], new[:600], reason))
+    else:
+        question = ("The coordinator proposes a new proof command: `%s` (now: `%s`). Reply yes to accept it.%s"
+                    % (new[:500], (old or "none")[:500], reason))
     return {"decision": "ask_owner", "proof_ask": {"kind": "rescope", "proposed": new},
-            "question": "The coordinator proposes a new proof command: `%s` (now: `%s`). Reply yes to accept it."
-                        % (new[:100], (old or "none")[:70]),
-            "detail": "Proposed proof command: %s\nCurrent: %s\nAccept: %s (or answer `/crew-proof %s brave` to also skip "
+            "question": question,
+            "detail": "Proposed proof command: %s\nCurrent: %s\n%sAccept: %s (or answer `/crew-proof %s brave` to also skip "
                       "Hermes's dangerous-command check for this card)" % (new, old or "(none)",
+                                                                          ("Coordinator's reason: %s\n" % why) if why else "",
                                                                           answer_line(card_id, "--yes"), card_id)}
 
 
@@ -578,7 +607,7 @@ def blocked_ask_for(card, out=""):
 
 def apply_ask_owner(ctx, card, question, detail=""):
     cid = card["id"]
-    text = "Needs you: %s" % " ".join(question.split())[:300]
+    text = "Needs you: %s" % " ".join(question.split())[:2000]
     if card["status"] == "ready" or (card["status"] == "blocked" and not card.get("block_kind")):
         # a held ready card is stopped for the owner; an untyped breaker block is typed in place
         kanban("block", cid, "--kind", "needs_input", text)
@@ -755,7 +784,7 @@ def apply_decision(ctx, card, decisions, dec):
                 body = crew_card.rewrite_line(body, label, dec[key])
         if body != (card.get("body") or ""):
             set_body(card["id"], body)
-        dec.update(proof_change_ask(card["id"], old, new))     # recorded as the ask it became
+        dec.update(proof_change_ask(card["id"], old, new, why=str(dec.get("why") or dec.get("fix") or "")))     # recorded as the ask it became
         return apply_ask_owner(ctx, card, dec["question"], dec["detail"])
     if kind == "split":
         return apply_split(ctx, card, dec)

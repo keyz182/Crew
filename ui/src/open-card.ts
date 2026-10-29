@@ -12,3 +12,23 @@ export function cardFromHash(hash: string): string {
   const id = m ? new URLSearchParams(m[1]).get('card') || '' : ''
   return /^[A-Za-z0-9_-]+$/.test(id) ? id : ''
 }
+
+const CARD_ID = /^[A-Za-z0-9_-]+$/
+
+// The card id in a location query ("?card=t_x"), or '' when the query opens no card: what a shared card link carries
+// when it lands on the served page or the hosted Crew tab.
+export function cardFromSearch(search: string): string {
+  const id = new URLSearchParams((search || '').replace(/^\?/, '')).get('card') || ''
+  return CARD_ID.test(id) ? id : ''
+}
+
+// The card id of a shareable card link ("<dashboard>/crew?card=<id>", crew_card.card_url) that points at THIS dashboard,
+// or '' when the href is another site's or the dashboard is not known yet. `dashboardUrl` is board.json's dashboard_url,
+// the base crew_notify builds every ticket link on, so a link Crew wrote always matches and any other host never does.
+export function cardFromHref(href: string, dashboardUrl: string): string {
+  let url: URL, base: URL
+  try { url = new URL(href); base = new URL(dashboardUrl) } catch { return '' }
+  const dir = (u: URL) => u.origin + u.pathname.replace(/\/+$/, '').replace(/\/crew$/, '')   // crew_card.card_url's own trim
+  if (!/^https?:$/.test(url.protocol) || !url.pathname.replace(/\/+$/, '').endsWith(CREW_ROUTE) || dir(url) !== dir(base)) return ''
+  return cardFromSearch(url.search)
+}

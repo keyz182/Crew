@@ -85,7 +85,7 @@ class NotifyTests(unittest.TestCase):
         self.assertEqual(ORIGIN, target)
         self.assertIn("done · %s" % cid, text)
         self.assertIn("shipped the thing", text)
-        self.assertIn("Card: http://dash/card/%s" % cid, text)
+        self.assertIn("Card: http://dash/crew?card=%s" % cid, text)
         self.run_notify(s)                                  # the next tick
         self.run_notify(s)                                  # a restart reads the same state file
         self.assertEqual(1, len(s.calls))
@@ -251,6 +251,14 @@ class NotifyTests(unittest.TestCase):
         self.assertEqual(before, open(self.state, encoding="utf-8").read())
 
     # ---- the sender
+    def test_a_structured_summary_keeps_its_lines_and_a_secret_is_cut_to_the_end_of_its_word(self):
+        self.assertEqual("- Done: a\n- Evidence: rc=0", N.short_multiline("- Done:   a\n\n- Evidence: rc=0", 200))
+        # a password holding ; , ) ] must not leak its tail
+        for secret, tail in (("ab;cd9!x", "cd9!x"), ("s3cr,et,tail", "tail"), ("abc)def123", "def123")):
+            out = N.short_multiline("deploy ok password=%s\nnext" % secret, 200)
+            self.assertNotIn(tail, out)
+            self.assertTrue(out.endswith("\nnext"), out)
+
     def test_hermes_send_calls_the_public_sender_for_the_owner_profile_with_the_text_on_stdin(self):
         with mock.patch.object(N.subprocess, "run") as run:
             run.return_value = mock.Mock(returncode=0, stdout="sent", stderr="")

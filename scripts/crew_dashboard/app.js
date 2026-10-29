@@ -15820,10 +15820,21 @@ body:has(#crew-app[data-crew-shell]){margin:0;background:var(--crew-bg)}
     ] });
   }
 
+  // src/open-card.ts
+  var CARD_ID = /^[A-Za-z0-9_-]+$/;
+  function cardFromSearch(search) {
+    const id = new URLSearchParams((search || "").replace(/^\?/, "")).get("card") || "";
+    return CARD_ID.test(id) ? id : "";
+  }
+
   // src/route.ts
   function parseLocation(pathname, search) {
     const m = /^\/card\/([A-Za-z0-9_-]+)\/?$/.exec(pathname);
     if (m) return { page: "card", id: m[1] };
+    if (/^\/crew\/?$/.test(pathname)) {
+      const id = cardFromSearch(search);
+      if (id) return { page: "card", id };
+    }
     return { page: "board", all: /[?&]all=1/.test(search), .../[?&]older=1/.test(search) ? { older: true } : {} };
   }
   function hrefFor(r) {
@@ -15847,7 +15858,8 @@ body:has(#crew-app[data-crew-shell]){margin:0;background:var(--crew-bg)}
     const snap = window.__CREW_SNAPSHOT;
     const hosted = !!opts.base;
     const api = (0, import_react13.useMemo)(() => snap ? snapshotApi(snap) : fetchApi(opts.base || "", opts.fetch, !hosted), [snap, opts.base, opts.fetch, hosted]);
-    const start = () => snap ? { page: "card", id: snap.card_id } : hosted ? { page: "board", all: false } : parseLocation(window.location.pathname, window.location.search);
+    const shared = cardFromSearch(window.location.search);
+    const start = () => snap ? { page: "card", id: snap.card_id } : hosted ? shared ? { page: "card", id: shared } : { page: "board", all: false } : parseLocation(window.location.pathname, window.location.search);
     const [route, setRoute] = (0, import_react13.useState)(start);
     (0, import_react13.useEffect)(() => {
       if (snap || hosted) return;

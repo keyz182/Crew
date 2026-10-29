@@ -77,10 +77,24 @@ class HermesBin(unittest.TestCase):
         os.environ.pop("HERMES_BIN", None)
         with mock.patch.object(self.mod.shutil, "which", return_value="/usr/bin/hermes"):
             self.assertEqual(self.mod.hermes_bin(), "/usr/bin/hermes")
-        with mock.patch.object(self.mod.shutil, "which", return_value=None):
+        with mock.patch.object(self.mod.shutil, "which", return_value=None), \
+                mock.patch.object(self.mod.crew_card, "hermes_exe", return_value=""):   # not this machine's real launcher
             want = (os.path.join(self.mod.crew_card.default_home(), "bin", "hermes.exe") if os.name == "nt"
                     else os.path.expanduser("~/.local/bin/hermes"))
             self.assertEqual(self.mod.hermes_bin(), want)
+
+    def test_hermes_exe_prefers_the_checkout_launcher_and_never_a_package_manager_venv(self):
+        card = load("crew_card_pm", os.path.join("scripts", "crew_card.py"))
+        checkout = os.path.join(os.path.normpath("C:/repo/hermes-agent"), ".hermes", "bin", "hermes.exe")
+        py = os.path.normpath("C:/home/installs/abc/environments/xyz/venv/Scripts/python.exe")
+        pm_exe = os.path.join(os.path.dirname(py), "hermes.exe")
+        with mock.patch.object(card, "hermes_root", return_value=os.path.normpath("C:/repo/hermes-agent")), \
+                mock.patch.object(card, "hermes_python", return_value=py), \
+                mock.patch.object(card, "default_home", return_value=os.path.normpath("C:/home")):
+            with mock.patch.object(os.path, "isfile", side_effect=lambda p: p in (checkout, pm_exe)):
+                self.assertEqual(card.hermes_exe(), checkout)      # the checkout wins over the PM venv
+            with mock.patch.object(os.path, "isfile", side_effect=lambda p: p == pm_exe):
+                self.assertEqual(card.hermes_exe(), "")            # and the PM venv alone is never adopted
 
     def test_a_cmd_launcher_gives_way_to_a_real_exe_on_windows(self):
         # Hermes Desktop's bin\hermes.cmd cut a multi-line card body to its first line (2026-10-14, Windows 11)

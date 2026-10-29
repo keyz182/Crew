@@ -57,14 +57,31 @@ def follow(conn, db, tid, now):
         cur = nxt
 
 
+def _progress_line(conn, task, kind):
+    """How far the card got: units passed of total, the runs so far and, on a card that needs the owner, the worker's
+    latest handoff. "" when there is nothing to say."""
+    units = (crew_card.load_progress(task["id"]) or {}).get("units") or []
+    runs = conn.execute("select summary from task_runs where task_id=? order by id", (task["id"],)).fetchall()
+    bits = []
+    if units:
+        bits.append("%d/%d units passed" % (sum(1 for u in units if u.get("pass") is True), len(units)))
+    if len(runs) > 1:
+        bits.append("%d runs" % len(runs))
+    if kind == "needs" and runs and runs[-1]["summary"]:
+        bits.append(N.short(runs[-1]["summary"], 240))
+    return ("Progress: %s" % " · ".join(bits)) if bits else ""
+
+
 def _extra(conn, db, kind, chain, task, dec):
     """The lines above the card link: what was delivered where, how the proof ended, what is open."""
     first = _task(conn, chain[0])
+    progress = _progress_line(conn, task, kind)
     if kind == "needs":
-        return "Reply here to answer, or /crew-unstuck %s to put it back in the queue." % task["id"]
+        reply = "Reply here to answer, or /crew-unstuck %s to put it back in the queue." % task["id"]
+        return (progress + "\n" + reply) if progress else reply
     if kind != "done":
         return ""
-    lines = []
+    lines = [progress] if progress else []
     lands = crew_card.field(first["body"], "Lands at") if first else ""
     if lands:
         lines.append("Lands at: %s" % N.short(lands, 200))

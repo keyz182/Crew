@@ -102,6 +102,23 @@ function cardFromHash(hash) {
   const id = m ? new URLSearchParams(m[1]).get("card") || "" : "";
   return /^[A-Za-z0-9_-]+$/.test(id) ? id : "";
 }
+var CARD_ID = /^[A-Za-z0-9_-]+$/;
+function cardFromSearch(search) {
+  const id = new URLSearchParams((search || "").replace(/^\?/, "")).get("card") || "";
+  return CARD_ID.test(id) ? id : "";
+}
+function cardFromHref(href, dashboardUrl) {
+  let url, base;
+  try {
+    url = new URL(href);
+    base = new URL(dashboardUrl);
+  } catch {
+    return "";
+  }
+  const dir = (u) => u.origin + u.pathname.replace(/\/+$/, "").replace(/\/crew$/, "");
+  if (!/^https?:$/.test(url.protocol) || !url.pathname.replace(/\/+$/, "").endsWith(CREW_ROUTE) || dir(url) !== dir(base)) return "";
+  return cardFromSearch(url.search);
+}
 
 // src/card-open.ts
 var open = false;
@@ -3229,7 +3246,7 @@ function Splash({ api }) {
     ] }),
     /* @__PURE__ */ jsxs17("div", { className: "sp-foot", children: [
       "crew.forgecoreai.com \xB7 v",
-      "0.10.4"
+      "0.10.5"
     ] })
   ] });
 }
@@ -3506,6 +3523,29 @@ function watchBlocked(ctx, api) {
     void tick();
   }, WATCH_MS);
 }
+function watchCardLinks(doc, api) {
+  let dashboard = "";
+  const load = () => api.get("/board.json").then((b) => {
+    dashboard = b?.dashboard_url || "";
+  }, () => {
+  });
+  load();
+  const onClick = (e) => {
+    if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    const a = e.target?.closest?.("a[href]");
+    if (!a || a.closest(".crew-scope")) return;
+    if (!dashboard) {
+      load();
+      return;
+    }
+    const id = cardFromHref(a.getAttribute("href") || "", dashboard);
+    if (!id || (a.textContent || "").trim() !== id) return;
+    e.preventDefault();
+    sdk2.host?.navigate?.(cardLink(id));
+  };
+  doc.addEventListener("click", onClick, true);
+  return () => doc.removeEventListener("click", onClick, true);
+}
 var desktop_default = {
   id: "crew",
   name: "Crew",
@@ -3524,6 +3564,10 @@ var desktop_default = {
       }
     ]);
     watchBlocked(ctx, api);
+    if (typeof sdk2.host?.navigate === "function" && typeof document !== "undefined") {
+      const off = watchCardLinks(document, api);
+      if (typeof ctx.onDispose === "function") ctx.onDispose(off);
+    }
   }
 };
 export {

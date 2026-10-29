@@ -430,4 +430,10 @@ ok((await mount(page.render)).includes('Crew could not load: boom'), 'page shows
   const { splashChecks } = await import(pathToFileURL(path.join(here, 'desktop_splash_checks.mjs')).href)
   await splashChecks({ tmp, rewritten, React, createRoot, window: dom.window, document, ok, eq, board })
 }
+// --- the chat ticket-link click (tests/desktop_card_link_checks.mjs)
+{
+  const here = path.dirname(fileURLToPath(import.meta.url))
+  const { cardLinkChecks } = await import(pathToFileURL(path.join(here, 'desktop_card_link_checks.mjs')).href)
+  await cardLinkChecks({ tmp, rewritten, window: dom.window, document, ok, eq })
+}
 console.log(`OK ${checks} checks`)

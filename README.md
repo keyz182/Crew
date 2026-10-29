@@ -5,7 +5,7 @@
 **You ask once. A coordinator owns the card until its proof passes.**
 
 [![Hermes plugin](https://img.shields.io/badge/Hermes-plugin-3fb950?style=flat-square)](https://github.com/NousResearch/hermes-agent)
-[![Version](https://img.shields.io/badge/version-0.10.4-3fb950?style=flat-square)](plugin.yaml)
+[![Version](https://img.shields.io/badge/version-0.10.5-3fb950?style=flat-square)](plugin.yaml)
 [![tests](https://github.com/macd2/Crew/actions/workflows/tests.yml/badge.svg)](https://github.com/macd2/Crew/actions/workflows/tests.yml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue?style=flat-square)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
@@ -33,6 +33,20 @@ hands the card to a **coordinator** that owns it until the proof command exits 0
 result back in the same chat, or one concrete question when it truly needs you.
 
 [![The crew dashboard: a card's graph with its running worker selected and the live transcript](assets/dashboard.webp)](https://crew.forgecoreai.com)
+
+## What's new in 0.10.5
+
+- **One link to a card, and the ticket id in a chat message is that link.** A card now has one shareable address,
+  `<dashboard>/crew?card=<id>`, that opens the card on the standalone page, in the Hermes web dashboard's Crew tab and
+  in Hermes Desktop. The notifications and endings Crew writes link the ticket id to it, and in a Desktop chat a click
+  on the id opens the card in the Crew tab. Only a link that reads as the ticket id and points at this dashboard is
+  taken; every other link, a modified click and Copy Link keep Desktop's own handling (#23, thanks @phuongvm).
+- **Windows: the right `hermes.exe`.** Crew's own scheduled steps now start Hermes from the checkout's own launcher
+  and never from a package-manager venv's `hermes.exe`, which belongs to a build snapshot and registers as a different
+  install (#18, thanks @phuongvm).
+- **Longer, clearer reports.** A rescope question shows what changed in a long proof command, questions to you carry
+  more of the text, the coordinator's reason is labelled after the command, the endings say how far the card got, and a
+  multi-line summary keeps its lines (#22, thanks @phuongvm).
 
 ## What's new in 0.10.4
 

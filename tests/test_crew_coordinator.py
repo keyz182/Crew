@@ -896,6 +896,21 @@ class ApplyDecisionTests(unittest.TestCase):
         self.assertEqual("blocked", dec["proof_ask"]["kind"])
         self.assertIn("/crew-proof t_1 brave", dec["detail"])
 
+    def test_a_rescope_of_a_long_proof_shows_the_changed_window_before_the_reason(self):
+        card = self.card()
+        old_cmd = "python -c \"import os; assert os.path.exists('/some/long/shared/prefix/of/the/proof'); assert len(log)==5\""
+        new_cmd = old_cmd.replace("len(log)==5", "len(log)>=5")
+        cc.crew_card.record_origin("t_1", env={"origin": "", "session": "s"}, proof_cmd=old_cmd)
+        dec = {"decision": "rescope", "why": "a sibling pushed 2 commits", "proof_cmd": new_cmd}
+        ok, _ = cc.apply_decision(self.ctx, card, [], dec)
+        self.assertTrue(ok)
+        q = dec["question"]
+        self.assertIn("len(log)==5", q.split("]")[0])        # the old window sits in the diff
+        self.assertIn("len(log)>=5", q.split("]")[0])        # and the new one
+        self.assertLess(q.index("[diff:"), q.index("Coordinator's reason: a sibling pushed 2 commits"))
+        self.assertIn("Coordinator's reason: a sibling pushed 2 commits", self.cli[-1][2])
+        self.assertIsNone(cc.proof_diff_span("rm -rf a", "ls b"))   # heads that differ already show in the truncation
+
     def test_a_blocked_stale_block_proof_is_asked_not_decided(self):
         card = self.card()
         cc.crew_card.record_origin("t_1", env={"origin": "", "session": "s"}, proof_cmd="rm -rf build-output")

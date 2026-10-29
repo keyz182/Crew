@@ -30,6 +30,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import urllib.parse
 from pathlib import Path
 
 HERE_SCRIPTS = os.path.dirname(os.path.abspath(__file__))
@@ -145,6 +146,15 @@ def dashboard_url():
     return "http://127.0.0.1:%s" % (os.environ.get("CREW_GRAPH_PORT") or "8799")
 
 
+def card_url(card_id, base=None):
+    """The one link to a card that every surface opens: <dashboard>/crew?card=<id>. The standalone page, the Hermes
+    web tab (mounted at /crew) and Desktop's Crew page all read ?card=; /card/<id> still opens on the standalone page."""
+    base = (base if base is not None else dashboard_url()).strip().rstrip("/")
+    if base.endswith("/crew"):
+        base = base[:-len("/crew")]
+    return "%s/crew?card=%s" % (base, urllib.parse.quote(str(card_id), safe=""))
+
+
 GATEWAY_HEARTBEAT_STALE_S = 120   # hermes gateway/status.py _RUNTIME_STATUS_STALE_TTL_S: 2x its 60 s housekeeping beat
 GATEWAY_START_HINT = "hermes gateway run (or hermes gateway install to start it automatically)"
 
@@ -222,11 +232,15 @@ def is_batch_launcher(path):
 
 
 def hermes_exe():
-    """A real hermes.exe on Windows ("" when there is none): the installer's bin, then the venv beside Hermes's python."""
+    """A real hermes.exe on Windows ("" when there is none): the Hermes checkout's own launcher, the installer's bin, then
+    the venv beside Hermes's python. A venv under <home>\\installs\\<hash>\\ is a package-manager environment bound to a
+    build snapshot, with an install_id of its own: crew never adopts its hermes.exe."""
     py = hermes_python()
-    for cand in (os.path.join(default_home(), "bin", "hermes.exe"),
-                 os.path.join(os.path.dirname(py), "hermes.exe") if py else ""):
-        if cand and os.path.isfile(cand):
+    candidates = [os.path.join(hermes_root(), ".hermes", "bin", "hermes.exe"), os.path.join(default_home(), "bin", "hermes.exe")]
+    if py and os.sep + "installs" + os.sep not in os.path.normpath(py).lower():
+        candidates.append(os.path.join(os.path.dirname(py), "hermes.exe"))
+    for cand in candidates:
+        if os.path.isfile(cand):
             return cand
     return ""
 

@@ -46,7 +46,6 @@ import sqlite3
 import subprocess
 import sys
 import time
-import urllib.parse
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 if HERE not in sys.path:
@@ -72,9 +71,16 @@ def short(text, n):
     return text if len(text) <= n else text[: n - 1] + "…"
 
 
+def short_multiline(text, n):
+    """short() that keeps the line breaks of a structured summary (Done / Not done / Evidence) and the long rescope ask,
+    with the same secret redaction; n bounds the whole."""
+    lines = (" ".join(ln.split()) for ln in str(text or "").splitlines())
+    text = SECRET_RX.sub("[redacted]", "\n".join(ln for ln in lines if ln))
+    return text if len(text) <= n else text[: n - 1] + "…"
+
+
 def card_url(tid):
-    base = (os.environ.get("CREW_CARD_BASE") or crew_card.dashboard_url()).rstrip("/")
-    return "%s/card/%s" % (base, urllib.parse.quote(tid))
+    return crew_card.card_url(tid, os.environ.get("CREW_CARD_BASE") or None)
 
 
 def state_file(board=None):
@@ -164,14 +170,14 @@ def done_summary(conn, task):
     """What a done card delivered: its newest run summary, else its result (the closing summary of the report)."""
     run = conn.execute("select summary from task_runs where task_id=? and summary is not null "
                        "order by id desc limit 1", (task["id"],)).fetchone()
-    return short((run["summary"] if run else None) or task["result"] or "", 600)
+    return short_multiline((run["summary"] if run else None) or task["result"] or "", 2000)
 
 
 def _md_extra(extra):
     """`Key: value` lines of the caller's extra block as a compact list, other sentences as plain lines."""
     out = []
     for line in (extra or "").strip("\n").splitlines():
-        m = re.match(r"^(Lands at|Proof):\s*(.*)$", line)
+        m = re.match(r"^(Lands at|Proof|Progress):\s*(.*)$", line)
         out.append("- **%s:** %s" % (m.group(1), m.group(2)) if m else line)
     return "\n".join(out)
 
@@ -181,7 +187,7 @@ def _text_md(conn, task, kind, src, question="", extra=""):
     contract-style list, and the Crew pointer (crew_card.DESKTOP_LINE) LAST as a blockquote."""
     tid, title = task["id"], short(task["title"], 120)
     lead = {"done": "**Done**", "abandoned": "**Abandoned**", "needs": "**Needs you**"}[kind]
-    parts = ["%s · `%s` · %s" % (lead, tid, title)]
+    parts = ["%s · [%s](%s) · %s" % (lead, tid, card_url(tid), title)]   # a click on the id opens the card in-app
     if kind == "done":
         summary = done_summary(conn, task)
         if summary:
@@ -202,7 +208,7 @@ def _text_md(conn, task, kind, src, question="", extra=""):
             reason = (json.loads(ev["payload"] or "{}") or {}).get("reason") if ev else ""
         except ValueError:
             reason = ""
-        reason = short(question or reason or task["last_failure_error"] or "", 300)
+        reason = short_multiline(question or reason or task["last_failure_error"] or "", 2000)
         if reason and reason != "initial_status":
             parts.append(reason)
     if src and src != tid:
@@ -238,7 +244,7 @@ def _text(conn, task, kind, src, question="", extra="", md=False):
         reason = (json.loads(ev["payload"] or "{}") or {}).get("reason") if ev else ""
     except ValueError:
         reason = ""
-    reason = short(question or reason or task["last_failure_error"] or "", 300)
+    reason = short_multiline(question or reason or task["last_failure_error"] or "", 2000)
     return ("🔴 needs you · %s · %s\n%s%s%s"
             % (tid, title, ("%s\n" % reason) if reason and reason != "initial_status" else "", tail, link))
 
