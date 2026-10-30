@@ -36,7 +36,12 @@ An edit to a file here is lost or conflicts when crew updates. To keep your own 
 
     settings.conf   only the keys you change. Each one replaces the shipped value; a key the
                     template does not have is added. A list such as `skills_extra` replaces the
-                    whole shipped list.
+                    whole shipped list. Only owner keys are taken: every `model.*` key,
+                    `fallback_providers`, `agent.max_turns` and `skills_extra`. Any other key is
+                    a gate the card contract relies on (`crew.role`, the toolsets, Slack off, the
+                    orchestrator profile, MCP servers): it is skipped and reported. A key written
+                    more than once in the file is refused (the shipped value applies) and reported.
+                    `--check` and the install output list every skipped or refused line.
     SOUL.md         replaces the shipped persona.
 
 For example, to give the worker another model:

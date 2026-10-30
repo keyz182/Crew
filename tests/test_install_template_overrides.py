@@ -76,6 +76,44 @@ class OverrideTests(unittest.TestCase):
         self.assertEqual([], CI._apply_settings("p", self.conf), "applying twice must change nothing")
         self.assertEqual([], CI.settings_problems("p", "worker", self.tpl))
 
+    def check_with(self, **seed):
+        cfg, saved = FakeConfig(), CI.h
+        CI.h = cfg
+        self.addCleanup(setattr, CI, "h", saved)
+        cfg.seed("p", **seed)
+        return cfg
+
+    def test_a_gate_key_is_skipped_and_check_reports_it(self):
+        self.override("settings.conf", "platforms.slack.enabled = true\nmodel.default = my-model\n")
+        self.assertNotIn(("platforms.slack.enabled", "true"), CI._conf_entries(self.conf))
+        self.assertIn(("model.default", "my-model"), CI._conf_entries(self.conf))
+        self.check_with(crew__role="worker", model__default="my-model", agent__max_turns="150")
+        problems = CI.settings_problems("p", "worker", self.tpl)
+        self.assertEqual(1, len(problems), problems)
+        self.assertIn("platforms.slack.enabled is not an owner key", problems[0])
+
+    def test_crew_role_cannot_be_overridden(self):
+        self.override("settings.conf", "crew.role = coordinator\n")
+        self.assertIn(("crew.role", "worker"), CI._conf_entries(self.conf))
+        self.check_with(crew__role="worker", model__default="shipped-model", agent__max_turns="150")
+        problems = CI.settings_problems("p", "worker", self.tpl)
+        self.assertEqual(1, len(problems), problems)
+        self.assertIn("crew.role is not an owner key", problems[0])
+
+    def test_a_key_written_twice_is_refused_and_reported(self):
+        self.override("settings.conf", "model.default = one\nmodel.default = two\nagent.max_turns = 90\n")
+        self.assertIn(("model.default", "shipped-model"), CI._conf_entries(self.conf))
+        self.assertIn(("agent.max_turns", "90"), CI._conf_entries(self.conf))
+        self.check_with(crew__role="worker", model__default="shipped-model", agent__max_turns="90")
+        problems = CI.settings_problems("p", "worker", self.tpl)
+        self.assertEqual(1, len(problems), problems)
+        self.assertIn("model.default is written 2 times", problems[0])
+
+    def test_fallback_providers_is_an_owner_key(self):
+        self.override("settings.conf", "fallback_providers = [{provider: p, model: m}]\n")
+        self.assertIn(("fallback_providers", "[{provider: p, model: m}]"), CI._conf_entries(self.conf))
+        self.assertEqual([], CI._override_lines(self.conf)[1])
+
     def test_a_soul_override_replaces_the_shipped_persona(self):
         self.override("SOUL.md", "my persona\n")
         self.assertEqual(os.path.join(self.over, "worker", "SOUL.md"), CI._soul_source(self.tpl))
