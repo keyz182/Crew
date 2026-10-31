@@ -106,12 +106,14 @@ class ActionRouteTests(RealBoardCase):
         self.assertEqual(r.status_code, 200)
         self.assertFalse(r.json()["ok"])
 
-    def test_a_raising_function_answers_ok_false(self):
+    def test_a_raising_function_answers_ok_false_without_the_exception_text(self):
         with patch.object(self.crew_card, "unstuck_card", side_effect=OSError("db gone")):
             from dashboard import plugin_api
-            with self.assertLogs(plugin_api._log, "ERROR"):
+            with self.assertLogs(plugin_api._log, "ERROR") as logs:
                 r = self.post("unstuck", {"card": self.card})
-        self.assertEqual((r.status_code, r.json()), (200, {"ok": False, "text": "unstuck failed: db gone"}))
+        self.assertEqual((r.status_code, r.json()), (200, {"ok": False, "text": "unstuck failed - see the dashboard log"}))
+        self.assertNotIn("db gone", r.text)              # the exception's own words stay in the log (py/stack-trace-exposure)
+        self.assertTrue(any("db gone" in line for line in logs.output), logs.output)
 
 
 if __name__ == "__main__":

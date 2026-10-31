@@ -294,11 +294,15 @@ def main():
         return 2
 
     profile = crew_proof_board.chrome_scratch("crew-sitbox-")
+    # Chrome puts its ProcessSingleton socket under TMPDIR, not under --user-data-dir: with a long or
+    # missing TMPDIR it exits with "Failed to create socket directory" and the page never loads (measured
+    # 2026-10-29, TMPDIR pointing at a folder that did not exist). Point TMPDIR at the throwaway dir
+    # chrome_scratch already sized for the AF_UNIX limit, exactly like crew_proof_board._dom_once does.
+    chrome_env = dict(os.environ, TMPDIR=profile, XDG_CACHE_HOME=os.path.join(profile, "cache"))
     proc = subprocess.Popen(
         [CHROME, "--headless=new", "--password-store=basic", "--disable-gpu", "--no-sandbox", "--remote-debugging-port=%d" % PORT,
          "--user-data-dir=" + profile, "--window-size=1400,900", "%s/card/%s" % (URL, pending)],
-        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-        start_new_session=True)
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True, env=chrome_env)
     try:
         target = wait_for_target("/card/")
         if not target:

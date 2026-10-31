@@ -60,7 +60,7 @@ class ShellServerTests(RealBoardCase):
             self.assertIn("name=viewport", text)
             self.assertIn('rel="icon"', text)
             # nothing else: no inline script, no page markup of the old board or card
-            self.assertEqual(re.findall(r"<script\b[^>]*>", text), ["<script src=/app.js>"], path)
+            self.assertEqual(re.findall(r"<script\b[^>]*>", text, re.IGNORECASE), ["<script src=/app.js>"], path)
             for old in ("page-board", "page-card", "INIT=", "<style", "id=badge"):
                 self.assertNotIn(old, text, path)
             shells.add(text)
@@ -155,7 +155,7 @@ class SnapshotFileTests(RealBoardCase):
         with open(os.path.join(DASH, "app.js"), encoding="utf-8") as fh:
             self.assertIn(fh.read(), doc)
         self.assertEqual(len(re.findall(r"</script>", doc)), 2)   # the snapshot and the app, nothing a card can add
-        markup = re.sub(r"<script>.*?</script>", "", doc, flags=re.S)   # what is left loads nothing from outside
+        markup = re.sub(r"<script>.*?</script>", "", doc, flags=re.S | re.IGNORECASE)   # what is left loads nothing from outside
         self.assertNotRegex(markup, r"(?:src|href)=[\"']?https?:")
         self.assertNotIn("<script src", markup)
 

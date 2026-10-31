@@ -360,8 +360,9 @@ def _run_action(name: str, card: str, mode: str) -> tuple[bool, str]:
     crew_stop = importlib.import_module("crew_stop")   # _cmd_maintenance("stop", card): crew_stop.py <card>
     try:
         code, text = crew_stop.run([card])
-    except SystemExit as exc:
-        return False, "stop refused: %s" % exc
+    except SystemExit as exc:                    # crew_stop calls sys.exit(main()): the code is not an error message
+        _log.warning("crew dashboard: stop refused for %s (exit %s)", card, getattr(exc, "code", None))
+        return False, "stop refused - see the dashboard log"
     return code == 0, text
 
 
@@ -382,6 +383,6 @@ def post_action(name: str, body: dict | None = Body(default=None)):
         ok, text = _run_action(name, card, mode)
     except Exception as exc:  # noqa: BLE001 - a button press must answer, never hang the page
         _log.exception("crew dashboard: action %s on %s failed", name, card)
-        return JSONResponse(content={"ok": False, "text": "%s failed: %s" % (name, exc)}, headers=dict(_RESPONSE_HEADERS))
+        return JSONResponse(content={"ok": False, "text": "%s failed - see the dashboard log" % name}, headers=dict(_RESPONSE_HEADERS))
     _invalidate()                   # these actions move or rewrite cards: the next poll must not be cached
     return JSONResponse(content={"ok": bool(ok), "text": str(text)}, headers=dict(_RESPONSE_HEADERS))

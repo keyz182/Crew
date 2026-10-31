@@ -53,6 +53,66 @@ def evaluate(ws_url, expression):
         ws.close()
 
 
+def ws_client(ws_url):
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from crew_ws import WSClient
+    return WSClient(ws_url)
+
+
+def rect(ws, selector):
+    """Centre of the first element matching `selector` in CSS pixels, or None."""
+    return ws.evaluate("""
+      (function(){
+        var e = document.querySelector(%s);
+        if(!e) return null;
+        var r = e.getBoundingClientRect();
+        if(!r.width || !r.height) return null;
+        return {x: r.x + r.width/2, y: r.y + r.height/2, w: r.width, h: r.height,
+                left: r.x, top: r.y};
+      })()
+    """ % json.dumps(selector))
+
+
+_CID = [1]
+
+
+def cdp(ws, method, params=None):
+    """One CDP command with its own id (WSClient.call wants (id, method, params))."""
+    _CID[0] += 1
+    return ws.call(_CID[0], method, params or {})
+
+
+def click_at(ws, x, y):
+    """A real mouse click through CDP: the handlers the owner's mouse triggers, not a synthetic event.
+
+    The page is React and its graph listens on pointer/mouse input at the stage, so a dispatched
+    MouseEvent from page script is not the same thing (measured 2026-10-29: the synthetic click left
+    the panel shut while a real one opens it).
+    """
+    for kind in ("mousePressed", "mouseReleased"):
+        cdp(ws, "Input.dispatchMouseEvent",
+            {"type": kind, "x": x, "y": y, "button": "left", "clickCount": 1})
+
+
+def esc(ws):
+    for kind in ("keyDown", "keyUp"):
+        cdp(ws, "Input.dispatchKeyEvent", {"type": kind, "key": "Escape", "code": "Escape",
+                                           "windowsVirtualKeyCode": 27, "nativeVirtualKeyCode": 27})
+
+
+def panel_open(ws):
+    return ws.evaluate("document.getElementById('panel').classList.contains('open')")
+
+
+def wait_panel(ws, want, secs=8):
+    end = time.time() + secs
+    while time.time() < end:
+        if panel_open(ws) is want:
+            return True
+        time.sleep(0.2)
+    return False
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--card", required=True)
@@ -64,71 +124,75 @@ def main():
 
     url = "http://%s/card/%s" % (args.host, args.card)
     profile = crew_proof_board.chrome_scratch("crew-click-")
+    chrome_env = dict(os.environ, TMPDIR=profile, XDG_CACHE_HOME=os.path.join(profile, "cache"))
     proc = subprocess.Popen(
         [CHROME, "--headless=new", "--password-store=basic", "--disable-gpu", "--no-sandbox",
          "--remote-debugging-port=%d" % PORT, "--user-data-dir=" + profile,
          "--window-size=1400,760", url],
-        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=chrome_env)
 
     checks = []
+    ws = None
     try:
         target = wait_for_target("/card/")
         if not target:
             print("page never loaded"); return 2
-        ws_url = target["webSocketDebuggerUrl"]
+        ws = ws_client(target["webSocketDebuggerUrl"])
 
         # wait until the page has drawn the graph
+        n = 0
         for _ in range(40):
-            n = evaluate(ws_url, "document.querySelectorAll('#nodes .node').length")
+            n = ws.evaluate("document.querySelectorAll('#nodes .node, .nodes .node').length")
             if n:
                 break
             time.sleep(0.5)
         checks.append(("graph drawn (%s nodes)" % n, bool(n)))
 
-        open_before = evaluate(ws_url, "document.getElementById('panel').classList.contains('open')")
-        checks.append(("panel starts closed", open_before is False))
+        checks.append(("panel starts closed", panel_open(ws) is False))
 
-        clicked = evaluate(ws_url, """
-          (function(){
-            var n = document.querySelector('#nodes .node .card');
-            if(!n) return 'no-node';
-            n.dispatchEvent(new MouseEvent('click', {bubbles:true, cancelable:true}));
-            return document.getElementById('panel').classList.contains('open');
-          })()
-        """)
-        checks.append(("node click opens the panel", clicked is True))
+        node = rect(ws, "#nodes .node, .nodes .node")
+        if not node:
+            checks.append(("the page exposes a node and a stage", False))
+        else:
+            click_at(ws, node["x"], node["y"])
+            checks.append(("node click opens the panel", wait_panel(ws, True)))
 
-        canvas = evaluate(ws_url, """
-          (function(){
-            var st = document.getElementById('stage');
-            st.dispatchEvent(new MouseEvent('click', {bubbles:true, cancelable:true}));
-            return document.getElementById('panel').classList.contains('open');
-          })()
-        """)
-        checks.append(("canvas click closes it", canvas is False))
+            # the stage re-flows when the docked panel opens, so the empty point is measured now
+            stage = rect(ws, "#stage, .stage")
+            if not stage:
+                checks.append(("the page exposes a stage to click", False))
+            else:
+                sx = stage["left"] + stage["w"] * 0.12
+                sy = stage["top"] + stage["h"] * 0.88
+                click_at(ws, sx, sy)
+                checks.append(("canvas click closes it", wait_panel(ws, False)))
 
-        reopened = evaluate(ws_url, """
-          (function(){
-            document.querySelector('#nodes .node .card').dispatchEvent(new MouseEvent('click',{bubbles:true}));
-            var a = document.getElementById('panel').classList.contains('open');
-            document.body.dispatchEvent(new KeyboardEvent('keydown', {key:'Escape', bubbles:true}));
-            return a + '|' + document.getElementById('panel').classList.contains('open');
-          })()
-        """)
-        checks.append(("esc closes it too", reopened == "true|false"))
+                click_at(ws, node["x"], node["y"])
+                opened = wait_panel(ws, True)
+                esc(ws)
+                checks.append(("esc closes it too", opened and wait_panel(ws, False)))
 
-        after = evaluate(ws_url, """
-          (function(){
-            document.querySelector('#nodes .node .card').dispatchEvent(new MouseEvent('click',{bubbles:true}));
-            var st = document.getElementById('stage');
-            st.dispatchEvent(new MouseEvent('mousedown', {bubbles:true, button:0}));
-            st.dispatchEvent(new MouseEvent('mouseup', {bubbles:true, button:0}));
-            st.dispatchEvent(new MouseEvent('click', {bubbles:true}));
-            return document.getElementById('panel').classList.contains('open');
-          })()
-        """)
-        checks.append(("a click after a drag still closes it", after is False))
+                click_at(ws, node["x"], node["y"])
+                opened = wait_panel(ws, True)
+                stage = rect(ws, "#stage, .stage") or stage
+                sx = stage["left"] + stage["w"] * 0.12
+                sy = stage["top"] + stage["h"] * 0.88
+                # a drag across the stage, then a plain click: the drag must not leave the stage deaf
+                cdp(ws, "Input.dispatchMouseEvent", {"type": "mousePressed", "x": sx, "y": sy,
+                                                     "button": "left", "clickCount": 1})
+                cdp(ws, "Input.dispatchMouseEvent", {"type": "mouseMoved", "x": sx + 60, "y": sy,
+                                                     "button": "left"})
+                cdp(ws, "Input.dispatchMouseEvent", {"type": "mouseReleased", "x": sx + 60, "y": sy,
+                                                     "button": "left", "clickCount": 1})
+                time.sleep(0.3)
+                click_at(ws, sx, sy)
+                checks.append(("a click after a drag still closes it", opened and wait_panel(ws, False)))
     finally:
+        if ws is not None:
+            try:
+                ws.close()
+            except Exception:
+                pass
         proc.terminate()
         try:
             proc.wait(timeout=10)
