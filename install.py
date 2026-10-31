@@ -739,9 +739,70 @@ def _conf_value(val):
 INSTALLER_KEYS = ("skills_extra",)
 
 
+# The owner's own template files, kept outside the package so an update never touches them:
+# <default home>/crew/templates/<role>/settings.conf overrides the shipped keys one by one, and a SOUL.md
+# there replaces the shipped persona. CREW_TEMPLATE_OVERRIDES names another folder (the tests point it at
+# an empty one, so an owner's overrides never leak into a run).
+def _overrides_root():
+    return os.environ.get("CREW_TEMPLATE_OVERRIDES") or os.path.join(crew_card.default_home(), "crew", "templates")
+
+
+def _override_of(tpl_file):
+    """The owner's override of a shipped template file: the same role folder and file name under the overrides root."""
+    role_dir, name = os.path.split(tpl_file)
+    return os.path.join(_overrides_root(), os.path.basename(role_dir), name)
+
+
+def _soul_source(tpl):
+    """The SOUL.md a role profile gets: the owner's override when there is one, else the shipped template."""
+    shipped = os.path.join(tpl, "SOUL.md")
+    override = _override_of(shipped)
+    return override if os.path.isfile(override) else shipped
+
+
+# The keys an owner override may set: the role's model (every model.* key) and its fallback providers, its turn
+# budget, and the extra skills it keeps. Every other template key is a gate the card contract relies on (crew.role,
+# the toolsets, Slack off, the orchestrator profile, MCP servers): an override of it is skipped and reported.
+OWNER_KEYS = ("agent.max_turns", "fallback_providers", "skills_extra")
+
+
+def _owner_key(key):
+    return key.startswith("model.") or key in OWNER_KEYS
+
+
+def _override_lines(conf_path):
+    """([(key, value)] the owner's override of a shipped settings.conf may apply, [problem]). A key that is not an
+    owner key is skipped, and a key written more than once in the file is refused (no value of it applies)."""
+    override = _override_of(conf_path)
+    lines = _read_conf_lines(override)
+    seen = {}
+    for key, _val in lines:
+        seen[key] = seen.get(key, 0) + 1
+    keep, problems = [], []
+    for key, val in lines:
+        if seen[key] > 1:
+            problems.append("%s: %s is written %d times; write it once (refused, the shipped value applies)"
+                            % (override, key, seen[key]))
+        elif not _owner_key(key):
+            problems.append("%s: %s is not an owner key (model.*, %s), skipped"
+                            % (override, key, ", ".join(OWNER_KEYS)))
+        else:
+            keep.append((key, val))
+    return keep, list(dict.fromkeys(problems))
+
+
 def _conf_lines(conf_path):
     """[(key, value)] for every `key = value` line of a role's settings.conf, installer directives
-    included, `{prefix}` resolved. [] when the file is missing."""
+    included, `{prefix}` resolved, with the owner's override of the same file on top: an override key
+    replaces the shipped value in place, a key the template lacks is added at the end. Only owner keys
+    written once are taken from the override (see _override_lines). [] when neither file exists."""
+    merged = dict(_read_conf_lines(conf_path))
+    merged.update(_override_lines(conf_path)[0])
+    return list(merged.items())
+
+
+def _read_conf_lines(conf_path):
+    """[(key, value)] for every `key = value` line of one settings.conf file. [] when the file is missing."""
     try:
         text = Path(conf_path).read_text(encoding="utf-8")
     except OSError:
@@ -775,10 +836,11 @@ def settings_problems(profile, role, tpl):
     The gates are only half of it: a role home without crew.role, without the empty
     fallback_providers, or with Slack left on is not the role the card contract assumes.
     """
-    entries = [(k, role if k == "crew.role" else v) for k, v in _conf_entries(os.path.join(tpl, "settings.conf"))]
+    conf = os.path.join(tpl, "settings.conf")
+    entries = [(k, role if k == "crew.role" else v) for k, v in _conf_entries(conf)]
     have = _cfg_many(profile, [k for k, _v in entries])
     return ["%s = %s, want %s" % (key, (have[key] or "unset").strip(), want)
-            for key, want in entries if (have[key] or "").strip() != want]
+            for key, want in entries if (have[key] or "").strip() != want] + _override_lines(conf)[1]
 
 
 def consent_hint(name):
@@ -1444,7 +1506,7 @@ def step_profiles(source_profile, prefix, apply, no_profiles=False):
     todo = []
     for role, name, home, tpl in plans:
         exists = os.path.isdir(home)
-        soul = os.path.join(tpl, "SOUL.md")
+        soul = _soul_source(tpl)
         rec = _shipped_record(home) if exists else {}
         shipped = Path(soul).read_text(encoding="utf-8") if os.path.exists(soul) else ""
         cur = None
@@ -1471,6 +1533,9 @@ def step_profiles(source_profile, prefix, apply, no_profiles=False):
     if not todo:
         return "OK", "role profiles (%s)" % ", ".join(p[1] for p in plans)
     if not apply:
+        for t in todo:
+            for problem in _override_lines(os.path.join(t[3], "settings.conf"))[1]:
+                print("  override %s" % problem)
         return "CHANGED", "role profiles -> " + ", ".join(
             ("create " if not t[4] else "update ") + t[1] for t in todo)
     done = []
@@ -1489,7 +1554,7 @@ def step_profiles(source_profile, prefix, apply, no_profiles=False):
         owned = (not existed) or crew_owned(home)
         os.makedirs(os.path.join(home, "crew"), exist_ok=True)
         rec = _shipped_record(home)
-        soul_src = os.path.join(tpl, "SOUL.md")
+        soul_src = _soul_source(tpl)
         if os.path.exists(soul_src):
             shipped = Path(soul_src).read_text(encoding="utf-8")
             dst = os.path.join(home, "SOUL.md")
@@ -1498,6 +1563,8 @@ def step_profiles(source_profile, prefix, apply, no_profiles=False):
                 Path(dst).write_text(shipped, encoding="utf-8")
                 rec["SOUL.md"] = _sha(shipped)
         keys = _apply_settings(name, os.path.join(tpl, "settings.conf"))
+        for problem in _override_lines(os.path.join(tpl, "settings.conf"))[1]:
+            print("  override %s" % problem)
         rec["settings"] = keys
         rec["provisioned"] = _provision_role_profile(name, home, tpl, resolve_profile_home(source_profile), owned)
         Path(os.path.join(home, SHIPPED_RECORD)).write_text(json.dumps(rec, indent=2, sort_keys=True), encoding="utf-8")

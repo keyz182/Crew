@@ -209,7 +209,11 @@ zoom with a status-block view when zoomed out, a minimap, and `f` fit, `0` reset
 has (`platform_toolsets.cli`: a kanban worker is a `chat` run, so this list is exactly its tools) and
 must not have, its own copy of the plugin, scripts and roles file, and the plugin enabled.
 A file you edit in a profile is never overwritten: the installer records the hash of what it
-shipped and only replaces a file still equal to that record.
+shipped and only replaces a file still equal to that record. Your own template values go in
+`<Hermes home>/crew/templates/<role>/` (`settings.conf` keys override the shipped ones one by one, a
+`SOUL.md` there replaces the shipped persona), which an update never touches; `CREW_TEMPLATE_OVERRIDES`
+names another folder. Only owner keys are taken (`model.*`, `fallback_providers`, `agent.max_turns`,
+`skills_extra`); a gate key or a key written twice is skipped and reported (see `templates/README.md`).
 
 A role profile is slim. `hermes profile create --clone-from` copies the installing profile's whole
 skills tree (47 MB here); the installer then cuts `<profile>/skills/` down to `skills/crew/` (the role

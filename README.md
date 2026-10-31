@@ -156,8 +156,9 @@ By default:
   your profile's `config.yaml` (including its `hooks:`), its whole `.env` (provider keys), `SOUL.md`, skills
   and memories (`MEMORY.md`, `USER.md`); Hermes strips the messaging channels. Then, in each role profile:
   - sets the keys from `templates/profiles/<role>/settings.conf` with `hermes config set`. Models are
-    Anthropic's, and `model.base_url` is pinned to `https://api.anthropic.com`: edit the template before
-    installing to use your own;
+    Anthropic's, and `model.base_url` is pinned to `https://api.anthropic.com`: to use your own, put the
+    keys you change in `<Hermes home>/crew/templates/<role>/settings.conf`, which an update never touches
+    (see [templates/README.md](templates/README.md));
   - replaces `SOUL.md` with the role's persona (only while it is still the shipped one);
   - deletes every skill that is not crew's, printing each path. This only happens in a role profile crew
     created (it carries `crew/template-shipped.json`);
