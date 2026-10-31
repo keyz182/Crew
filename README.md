@@ -5,7 +5,7 @@
 **You ask once. A coordinator owns the card until its proof passes.**
 
 [![Hermes plugin](https://img.shields.io/badge/Hermes-plugin-3fb950?style=flat-square)](https://github.com/NousResearch/hermes-agent)
-[![Version](https://img.shields.io/badge/version-0.10.6-3fb950?style=flat-square)](plugin.yaml)
+[![Version](https://img.shields.io/badge/version-0.10.7-3fb950?style=flat-square)](plugin.yaml)
 [![tests](https://github.com/macd2/Crew/actions/workflows/tests.yml/badge.svg)](https://github.com/macd2/Crew/actions/workflows/tests.yml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue?style=flat-square)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
@@ -33,6 +33,17 @@ hands the card to a **coordinator** that owns it until the proof command exits 0
 result back in the same chat, or one concrete question when it truly needs you.
 
 [![The crew dashboard: a card's graph with its running worker selected and the live transcript](assets/dashboard.webp)](https://crew.forgecoreai.com)
+
+## What's new in 0.10.7
+
+- **Your role settings survive an update.** Each role's `settings.conf` and `SOUL.md` can be overridden from Crew's
+  own templates folder, outside the package, so updating Crew no longer resets your model, provider, extra skills or
+  persona. Overrides apply key by key, duplicates are refused, and anything you leave out keeps the shipped value
+  (#24, thanks @keyz182).
+- **A failed button no longer prints a Python error.** When a dashboard action fails, the page answers with a short,
+  stable line and the detail goes to the log. The two test regexps that strip and count `<script>` tags now match any
+  case, which clears the repository's four code-scanning alerts.
+- **Docs:** a role ships no fallback model, and an owner override may name one.
 
 ## What's new in 0.10.6
 
