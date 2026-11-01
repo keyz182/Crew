@@ -114,6 +114,24 @@ class OverrideTests(unittest.TestCase):
         self.assertIn(("fallback_providers", "[{provider: p, model: m}]"), CI._conf_entries(self.conf))
         self.assertEqual([], CI._override_lines(self.conf)[1])
 
+    def test_a_fallback_list_of_mappings_converges(self):
+        # Hermes prints a list of mappings as a YAML block; the override writes it as JSON. Same value: once applied,
+        # a second install changes nothing and --check is clean.
+        self.override("settings.conf", 'fallback_providers = [{"provider":"litellm","model":"reason"}]\n')
+        self.check_with(crew__role="worker", model__default="shipped-model", agent__max_turns="150",
+                        fallback_providers="[]")
+        self.assertIn("fallback_providers", CI._apply_settings("p", self.conf))
+        self.assertEqual([], CI._apply_settings("p", self.conf), "applying twice must change nothing")
+        self.assertEqual([], CI.settings_problems("p", "worker", self.tpl))
+
+    def test_a_different_fallback_mapping_is_still_reported(self):
+        self.override("settings.conf", 'fallback_providers = [{"provider":"litellm","model":"reason"}]\n')
+        self.check_with(crew__role="worker", model__default="shipped-model", agent__max_turns="150",
+                        fallback_providers='[{"provider":"litellm","model":"other"}]')
+        problems = CI.settings_problems("p", "worker", self.tpl)
+        self.assertEqual(1, len(problems), problems)
+        self.assertIn("fallback_providers", problems[0])
+
     def test_a_soul_override_replaces_the_shipped_persona(self):
         self.override("SOUL.md", "my persona\n")
         self.assertEqual(os.path.join(self.over, "worker", "SOUL.md"), CI._soul_source(self.tpl))
