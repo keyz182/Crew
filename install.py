@@ -457,16 +457,52 @@ def _config_get(profile, key):
 
 
 _LIST_ITEM_RX = re.compile(r"^\s*-\s*(.*)$")
+_MAP_PAIR_RX = re.compile(r"^\s*([^:\s][^:]*):(?:\s+(.*))?$")
+
+
+def _block_mappings(lines):
+    """A YAML block list of flat mappings (`- provider: p` with `  model: m` under it), as Hermes prints
+    fallback_providers, as a list of {key: text}; None when the lines are anything else."""
+    items = []
+    for line in lines:
+        item = _LIST_ITEM_RX.match(line)
+        pair = _MAP_PAIR_RX.match(item.group(1) if item else line)
+        if not pair or not (item or items):
+            return None
+        if item:
+            items.append({})
+        items[-1][pair.group(1).strip()] = (pair.group(2) or "").strip()
+    return items or None
+
+
+def _canon(value):
+    """A config value in one comparable form: a JSON list of mappings re-dumped with sorted keys and every scalar
+    as its text, so `[{"provider":"p","model":"m"}]` from a settings.conf matches what _cfg reads back; anything
+    else stripped as it is."""
+    text = (value or "").strip()
+    try:
+        data = json.loads(text)
+    except ValueError:
+        return text
+    if not (isinstance(data, list) and data and all(isinstance(x, dict) for x in data)):
+        return text
+    as_text = lambda v: v if isinstance(v, str) else json.dumps(v)
+    return json.dumps([{str(k): as_text(v) for k, v in m.items()} for m in data], sort_keys=True,
+                      separators=(",", ":"))
 
 
 def _cfg(profile, key):
     """The value `hermes config get` prints for a dotted key, as one line: a scalar as it is, a list as
-    '[a,b]' ('[]' when empty), None when the key is not set. Hermes does the reading, the way it does the writing."""
+    '[a,b]' ('[]' when empty), a list of mappings as JSON (see _canon), None when the key is not set. Hermes does
+    the reading, the way it does the writing."""
     rc, out = _cfg_raw_many(profile, [key])[key]
     out = (out or "").strip()
     if rc != 0 or not out:
         return None
     lines = [l for l in out.splitlines() if l.strip()]
+    mappings = _block_mappings(lines) if _LIST_ITEM_RX.match(lines[0]) else None
+    if mappings is not None:
+        return _canon(json.dumps(mappings))
     if all(_LIST_ITEM_RX.match(l) for l in lines):
         return "[%s]" % ",".join(_LIST_ITEM_RX.match(l).group(1).strip() for l in lines)
     return out if len(lines) > 1 else lines[0].strip()
@@ -840,7 +876,7 @@ def settings_problems(profile, role, tpl):
     entries = [(k, role if k == "crew.role" else v) for k, v in _conf_entries(conf)]
     have = _cfg_many(profile, [k for k, _v in entries])
     return ["%s = %s, want %s" % (key, (have[key] or "unset").strip(), want)
-            for key, want in entries if (have[key] or "").strip() != want] + _override_lines(conf)[1]
+            for key, want in entries if _canon(have[key]) != _canon(want)] + _override_lines(conf)[1]
 
 
 def consent_hint(name):
@@ -1432,7 +1468,7 @@ def _apply_settings(profile, conf_path):
     have = _cfg_many(profile, [k for k, _v in entries])
     changed = []
     for key, val in entries:
-        if have[key] == val:
+        if have[key] is not None and _canon(have[key]) == _canon(val):
             continue
         r = h(profile, "config", "set", key, val)
         if r.returncode == 0:
